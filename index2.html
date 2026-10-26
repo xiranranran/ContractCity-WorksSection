@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>藝文空間 | Art & Article Gallery</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome 圖示 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Noto Serif TC & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Serif+TC:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Firebase SDK Imports (Unified bundle / robust version) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Expose Firebase tools globally for our app script
+        try {
+            window.firebaseApp = initializeApp(JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}'));
+            window.db = getFirestore(window.firebaseApp);
+            window.auth = getAuth(window.firebaseApp);
+            window.appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        } catch (e) {
+            console.error("Firebase init config parse error:", e);
+        }
+
+        // Expose Firestore methods globally to avoid ReferenceErrors
+        window.collection = collection;
+        window.addDoc = addDoc;
+        window.getDocs = getDocs;
+        window.doc = doc;
+        window.updateDoc = updateDoc;
+        window.deleteDoc = deleteDoc;
+        window.onSnapshot = onSnapshot;
+
+        // Authenticate immediately
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(window.auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(window.auth);
+                }
+                console.log("Firebase authenticated successfully:", window.auth.currentUser?.uid);
+                if (window.initAppListeners) {
+                    window.initAppListeners();
+                }
+            } catch (err) {
+                console.error("Firebase auth error:", err);
+                // Fallback to init listeners anyway
+                if (window.initAppListeners) {
+                    window.initAppListeners();
+                }
+            }
+        };
+        initAuth();
+    </script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f5f9',
+                            100: '#e2edf5',
+                            200: '#c5dbe9',
+                            500: '#3a7ca5',
+                            800: '#1d4e74',
+                            900: '#112f4c',
+                        },
+                    },
+                    fontFamily: {
+                        serif: ['"Noto Serif TC"', 'serif'],
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f8fb; /* 淡藍基調 */
+            color: #2d3748;
+        }
+        .font-serif-title {
+            font-family: 'Noto Serif TC', serif;
+        }
+        .glass-nav {
+            background: rgba(244, 248, 251, 0.85);
+            backdrop-filter: blur(12px);
+        }
+        .gallery-card:hover .gallery-overlay {
+            opacity: 1;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #eef3f7;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #b0c7db;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #89abc6;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between antialiased selection:bg-blue-100 selection:text-blue-900">
+
+    <!-- 頂部導覽列 -->
+    <header class="sticky top-0 z-40 glass-nav border-b border-blue-200/80 transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <a href="#" class="flex items-center gap-3.5 group">
+                <div class="w-10 h-10 rounded-xl bg-blue-900 text-blue-200 flex items-center justify-center shadow-md transition-all duration-300 group-hover:scale-105 group-hover:bg-blue-800 group-hover:text-white group-hover:shadow-blue-950/20">
+                    <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                    </svg>
+                </div>
+                <div>
+                    <span class="font-serif-title text-lg sm:text-xl font-bold tracking-wider text-stone-900 block group-hover:text-blue-800 transition-colors">契約城市・衍伸藝廊</span>
+                    <span class="text-[10px] text-blue-500 tracking-[0.2em] uppercase block -mt-0.5 font-mono">Contract City Archives</span>
+                </div>
+            </a>
+
+            <!-- 主選單 (桌面版) -->
+            <nav class="hidden md:flex items-center space-x-8 font-medium text-stone-600 text-sm">
+                <button onclick="switchTab('all')" id="nav-all" class="nav-link text-blue-900 border-b-2 border-blue-900 py-1 transition-all">全覽作品</button>
+                <button onclick="switchTab('gallery')" id="nav-gallery" class="nav-link hover:text-blue-900 py-1 transition-all">畫作藝廊</button>
+                <button onclick="switchTab('articles')" id="nav-articles" class="nav-link hover:text-blue-900 py-1 transition-all">隨筆文章</button>
+                <button onclick="openAboutModal()" class="hover:text-blue-900 py-1 transition-all">關於本網站</button>
+            </nav>
+
+            <!-- 操作按鈕 -->
+            <div class="hidden md:flex items-center gap-4">
+                <button onclick="openPublishModal()" class="bg-blue-900 hover:bg-blue-800 text-white px-4 py-2.5 rounded-full text-sm font-medium transition-all shadow-sm hover:shadow-md flex items-center gap-2">
+                    <i class="fa-solid fa-plus text-xs"></i> 發布作品
+                </button>
+            </div>
+
+            <!-- 移動端選單按鈕 -->
+            <button id="mobile-menu-btn" class="md:hidden text-stone-700 hover:text-stone-900 p-2 focus:outline-none">
+                <i class="fa-solid fa-bars text-xl"></i>
+            </button>
+        </div>
+
+        <!-- 移動端下拉選單 -->
+        <div id="mobile-menu" class="hidden md:hidden bg-blue-50/90 border-b border-blue-200 px-4 pt-2 pb-6 space-y-3">
+            <button onclick="switchTab('all'); toggleMobileMenu();" class="block w-full text-left py-2 text-stone-800 font-medium border-b border-blue-100">全覽作品</button>
+            <button onclick="switchTab('gallery'); toggleMobileMenu();" class="block w-full text-left py-2 text-stone-600 font-medium border-b border-blue-100">畫作藝廊</button>
+            <button onclick="switchTab('articles'); toggleMobileMenu();" class="block w-full text-left py-2 text-stone-600 font-medium border-b border-blue-100">隨筆文章</button>
+            <button onclick="openAboutModal(); toggleMobileMenu();" class="block w-full text-left py-2 text-stone-600 font-medium border-b border-blue-100">關於本網站</button>
+            <button onclick="openPublishModal(); toggleMobileMenu();" class="w-full mt-2 bg-blue-900 text-white py-2.5 rounded-lg font-medium text-center">發布作品</button>
+        </div>
+    </header>
+
+    <!-- 主頁 Hero 區塊 -->
+    <section class="relative bg-gradient-to-b from-blue-50/80 to-blue-100/40 py-16 sm:py-24 border-b border-blue-200/60">
+        <div class="max-w-4xl mx-auto px-4 text-center">
+            <span class="text-xs font-semibold uppercase tracking-widest text-blue-800 bg-blue-100 px-3 py-1 rounded-full inline-block mb-4">Contract City Archives</span>
+            <h1 class="font-serif-title text-3xl sm:text-5xl font-bold text-stone-900 tracking-tight leading-tight mb-6">
+                契約城市・衍伸創作集廊
+            </h1>
+            <p class="text-stone-600 text-base sm:text-lg leading-relaxed max-w-2xl mx-auto font-light">
+                本網站為《契約城市》衍伸作品存放處，若您為之創作，也可在此處上傳您的作品。
+            </p>
+
+            <!-- 標籤過濾 -->
+            <div class="flex flex-wrap justify-center gap-2 mt-8" id="filter-tags">
+                <button onclick="filterByTag('all')" class="tag-btn active-tag px-4 py-1.5 rounded-full text-xs font-medium bg-blue-900 text-white transition-all">全部標籤</button>
+                <button onclick="filterByTag('角色插畫')" class="tag-btn px-4 py-1.5 rounded-full text-xs font-medium bg-white text-stone-600 border border-blue-200 hover:border-blue-400 transition-all">角色插畫</button>
+                <button onclick="filterByTag('同人小說')" class="tag-btn px-4 py-1.5 rounded-full text-xs font-medium bg-white text-stone-600 border border-blue-200 hover:border-blue-400 transition-all">同人小說</button>
+                <button onclick="filterByTag('短篇隨筆')" class="tag-btn px-4 py-1.5 rounded-full text-xs font-medium bg-white text-stone-600 border border-blue-200 hover:border-blue-400 transition-all">短篇隨筆</button>
+                <button onclick="filterByTag('設定解說')" class="tag-btn px-4 py-1.5 rounded-full text-xs font-medium bg-white text-stone-600 border border-blue-200 hover:border-blue-400 transition-all">設定解說</button>
+                <button onclick="filterByTag('衍生漫畫')" class="tag-btn px-4 py-1.5 rounded-full text-xs font-medium bg-white text-stone-600 border border-blue-200 hover:border-blue-400 transition-all">衍生漫畫</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 主要內容區域 -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 flex-grow w-full">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 sm:mb-8 border-b border-blue-200 pb-4 gap-4">
+            <div>
+                <h2 id="section-title" class="font-serif-title text-xl sm:text-2xl font-bold text-stone-900">最新創作全覽</h2>
+                <p id="section-desc" class="text-xs sm:text-sm text-stone-500 mt-1">混合展示最新發布的文章與畫作作品</p>
+            </div>
+            <div class="text-xs sm:text-sm text-stone-400 font-mono">
+                共 <span id="item-count" class="font-semibold text-stone-700">0</span> 項作品
+            </div>
+        </div>
+
+        <!-- 卡片網格容器 -->
+        <div id="content-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+            <!-- 動態由 JavaScript 帶入卡片內容 -->
+        </div>
+
+        <!-- 空白狀態 -->
+        <div id="empty-state" class="hidden text-center py-16 sm:py-20 px-4">
+            <i class="fa-regular fa-folder-open text-4xl text-blue-300 mb-3"></i>
+            <p class="text-stone-500 text-base sm:text-lg">暫無找到符合條件的作品。</p>
+            <button onclick="filterByTag('all')" class="mt-4 text-sm text-blue-800 underline hover:text-blue-900">重置篩選條件</button>
+        </div>
+    </main>
+
+    <!-- 頁尾 Footer -->
+    <footer class="bg-blue-950 text-stone-300 border-t border-blue-900 mt-16 sm:mt-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-6 text-center md:text-left">
+                <div>
+                    <h3 class="font-serif-title text-white text-base sm:text-lg font-bold mb-2">契約城市・衍伸藝廊</h3>
+                    <p class="text-xs sm:text-sm text-stone-300 leading-relaxed max-w-md">
+                        探索《契約城市》世界觀的無限可能。匯聚同人隨筆、繪畫作品與各式衍伸創作者的共創平台。
+                    </p>
+                </div>
+                <div class="md:text-right w-full md:w-auto">
+                    <h4 class="text-white text-xs sm:text-sm font-semibold mb-3 tracking-wider uppercase">快速連結</h4>
+                    <ul class="space-y-2 text-xs sm:text-sm flex flex-col md:flex-row md:justify-end md:space-x-6 md:space-y-0">
+                        <li><a href="javascript:void(0)" onclick="switchTab('gallery')" class="hover:text-white transition-colors py-1 block">畫作展示區</a></li>
+                        <li><a href="javascript:void(0)" onclick="switchTab('articles')" class="hover:text-white transition-colors py-1 block">文章隨筆區</a></li>
+                        <li><a href="javascript:void(0)" onclick="openAboutModal()" class="hover:text-white transition-colors py-1 block">關於本網站</a></li>
+                    </ul>
+                    <p class="text-[11px] sm:text-xs text-stone-400 mt-4 md:mt-6">© 2026 Contract City Archives. All rights reserved.</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ================= 互動彈窗 MODALS ================= -->
+
+    <!-- 畫作燈箱 Modal -->
+    <div id="artwork-modal" class="fixed inset-0 z-50 hidden bg-blue-950/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+        <div class="relative max-w-5xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh] my-auto">
+            <button onclick="closeArtworkModal()" class="absolute top-3 right-3 z-10 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-stone-100 text-stone-600 flex items-center justify-center hover:bg-stone-200 transition-all shadow">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <div class="w-full md:w-2/3 bg-blue-50/50 flex items-center justify-center p-4 sm:p-6 border-b md:border-b-0 md:border-r border-blue-100 min-h-[250px] sm:min-h-[350px]">
+                <img id="artwork-modal-img" src="" alt="" class="max-h-[50vh] md:max-h-[75vh] w-auto object-contain rounded-lg shadow-sm">
+            </div>
+            <div class="w-full md:w-1/3 p-4 sm:p-8 flex flex-col justify-between bg-white text-stone-800 overflow-y-auto max-h-[50vh] md:max-h-[90vh]">
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span id="artwork-modal-tag" class="text-xs font-semibold text-blue-800 uppercase tracking-widest bg-blue-100 px-2.5 py-1 rounded-full border border-blue-200">標籤</span>
+                        <div id="artwork-action-container" class="flex items-center gap-1.5"></div>
+                    </div>
+                    <h2 id="artwork-modal-title" class="font-serif-title text-xl sm:text-2xl font-bold mt-2 mb-2 text-stone-900">畫作名稱</h2>
+                    <p id="artwork-modal-date" class="text-[11px] sm:text-xs text-stone-400 mb-4 sm:mb-6 font-mono">創作日期: 2026-01-01</p>
+                    <div class="border-t border-blue-50 pt-3 sm:pt-4 mb-4 sm:mb-6">
+                        <h4 class="text-xs uppercase text-stone-500 tracking-wider font-semibold mb-2">創作理念與說明</h4>
+                        <p id="artwork-modal-desc" class="text-stone-600 text-xs sm:text-sm leading-relaxed whitespace-pre-line font-light">這裡展示創作敘述...</p>
+                    </div>
+
+                    <!-- 評論專區 -->
+                    <div class="border-t border-blue-50 pt-3 sm:pt-4 mb-4 sm:mb-6">
+                        <h4 class="text-xs uppercase text-stone-500 tracking-wider font-semibold mb-3 flex items-center justify-between">
+                            <span>讀者評論</span>
+                            <span id="artwork-comment-count" class="font-mono text-blue-800">0</span>
+                        </h4>
+                        <div id="artwork-comments-list" class="space-y-2 sm:space-y-3 mb-3 max-h-36 sm:max-h-48 overflow-y-auto pr-1"></div>
+                        <form onsubmit="handleCommentSubmit(event, 'artwork')" class="space-y-2">
+                            <input type="text" id="artwork-comment-name" placeholder="您的暱稱" required class="w-full px-3 py-2 bg-blue-50/40 border border-blue-200 rounded text-xs text-stone-800 focus:outline-none focus:border-blue-800">
+                            <div class="flex gap-2">
+                                <input type="text" id="artwork-comment-text" placeholder="留下您的感想..." required class="flex-grow px-3 py-2 bg-blue-50/40 border border-blue-200 rounded text-xs text-stone-800 focus:outline-none focus:border-blue-800">
+                                <button type="submit" class="px-3 py-2 bg-blue-900 hover:bg-blue-800 text-white rounded text-xs font-medium transition-colors shrink-0">留言</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div class="pt-3 sm:pt-4 border-t border-blue-50 flex items-center justify-between">
+                    <button id="artwork-like-btn" onclick="toggleLikeCurrentItem()" class="flex items-center gap-2 text-stone-600 hover:text-rose-500 transition-colors py-1">
+                        <i id="artwork-like-icon" class="fa-regular fa-heart text-lg sm:text-xl"></i>
+                        <span id="artwork-modal-likes" class="text-xs sm:text-sm font-mono">0</span>
+                    </button>
+                    <button onclick="shareItem()" class="text-xs text-stone-400 hover:text-stone-700 flex items-center gap-1.5 py-1">
+                        <i class="fa-regular fa-share-from-square"></i> 分享作品
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 文章閱讀 Modal -->
+    <div id="article-modal" class="fixed inset-0 z-50 hidden bg-blue-950/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+        <div class="relative max-w-3xl w-full bg-white rounded-2xl shadow-2xl overflow-hidden my-auto max-h-[95vh] flex flex-col">
+            <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-blue-100 flex items-center justify-between bg-blue-50/60 shrink-0">
+                <div class="flex items-center gap-2">
+                    <span id="article-modal-tag" class="text-xs font-semibold text-blue-800 bg-blue-100 px-2.5 py-0.5 rounded-full">隨筆</span>
+                    <span id="article-modal-readtime" class="text-xs text-stone-400 font-mono hidden sm:inline">5 分鐘閱讀</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div id="article-action-container" class="flex items-center gap-1.5"></div>
+                    <button onclick="closeArticleModal()" class="w-8 h-8 rounded-full bg-blue-100/60 text-stone-600 flex items-center justify-center hover:bg-blue-200 transition-all">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="p-4 sm:p-10 overflow-y-auto space-y-4 sm:space-y-6 flex-grow">
+                <div>
+                    <h1 id="article-modal-title" class="font-serif-title text-xl sm:text-3xl font-bold text-stone-900 leading-snug">文章標題</h1>
+                    <div class="flex flex-wrap items-center gap-2 sm:gap-3 mt-3 sm:mt-4 text-xs text-stone-500 font-mono border-b border-blue-50 pb-3 sm:pb-4">
+                        <span id="article-modal-date"><i class="fa-regular fa-calendar mr-1"></i> 2026-03-15</span>
+                        <span class="hidden sm:inline">•</span>
+                        <span>作者：墨韻</span>
+                    </div>
+                </div>
+
+                <div id="article-modal-img-container" class="hidden my-3 sm:my-4 rounded-xl overflow-hidden shadow-sm">
+                    <img id="article-modal-img" src="" alt="文章插圖" class="w-full h-auto max-h-[250px] sm:max-h-[350px] object-cover">
+                </div>
+
+                <div id="article-modal-content" class="prose font-serif text-stone-700 leading-relaxed sm:leading-loose space-y-3 sm:space-y-4 text-sm sm:text-lg"></div>
+
+                <div class="border-t border-blue-100 pt-6 sm:pt-8 mt-8 sm:mt-10">
+                    <h3 class="font-serif-title font-bold text-base sm:text-lg text-stone-900 mb-3 sm:mb-4 flex items-center justify-between">
+                        <span>讀者迴響與留言</span>
+                        <span id="article-comment-count" class="font-mono text-xs bg-blue-50 text-blue-800 px-2.5 py-1 rounded-full">0 則留言</span>
+                    </h3>
+                    <div id="article-comments-list" class="space-y-3 sm:space-y-4 mb-4 sm:mb-6"></div>
+                    <form onsubmit="handleCommentSubmit(event, 'article')" class="bg-blue-50/50 p-3 sm:p-4 rounded-xl border border-blue-200 space-y-3">
+                        <h4 class="text-xs font-semibold text-stone-700 uppercase tracking-wider">發表您的看法</h4>
+                        <div>
+                            <input type="text" id="article-comment-name" placeholder="您的暱稱" required class="w-full px-3 py-2 bg-white border border-blue-200 rounded-lg text-xs focus:outline-none focus:border-blue-800">
+                        </div>
+                        <textarea id="article-comment-text" placeholder="寫下您對這篇作品的想法..." rows="2" required class="w-full px-3 py-2 bg-white border border-blue-200 rounded-lg text-xs focus:outline-none focus:border-blue-800"></textarea>
+                        <div class="flex justify-end">
+                            <button type="submit" class="px-4 sm:px-5 py-2 bg-blue-900 text-white rounded-lg text-xs font-medium hover:bg-blue-800 transition-all shadow-sm">送出留言</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="px-4 sm:px-6 py-3 sm:py-4 border-t border-blue-100 bg-blue-50/60 flex items-center justify-between shrink-0">
+                <button id="article-like-btn" onclick="toggleLikeCurrentItem()" class="flex items-center gap-2 text-stone-600 hover:text-rose-500 transition-colors">
+                    <i id="article-like-icon" class="fa-regular fa-heart text-lg sm:text-xl"></i>
+                    <span id="article-modal-likes" class="text-xs sm:text-sm font-mono">0</span>
+                </button>
+                <button onclick="closeArticleModal()" class="px-4 sm:px-5 py-2 bg-blue-900 text-white rounded-full text-xs font-medium hover:bg-blue-800 transition-all">關閉閱讀</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 關於本網站 Modal -->
+    <div id="about-modal" class="fixed inset-0 z-50 hidden bg-blue-950/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="relative max-w-lg w-full bg-white rounded-2xl p-6 sm:p-8 shadow-2xl my-auto">
+            <button onclick="closeAboutModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center hover:bg-stone-200">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="text-center">
+                <div class="w-16 h-16 rounded-2xl bg-blue-900 text-blue-200 mx-auto mb-4 flex items-center justify-center shadow-lg border-2 border-blue-800">
+                    <svg class="w-8 h-8 stroke-current" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <h3 class="font-serif-title text-xl font-bold text-stone-900">契約城市・衍伸藝廊</h3>
+                <p class="text-xs text-blue-800 font-medium mt-1">Contract City Sub-Gallery</p>
+                <p class="text-sm text-stone-600 mt-4 leading-relaxed font-light text-left">
+                    本網站為《契約城市》附屬之子網站，專為收錄與典藏創作者們於世界觀內發揮的衍伸作品而設立。<br><br>
+                    不論您是繪製角色插畫、衍生漫畫，或是撰寫設定隨筆、同人文學，都歡迎在此處投稿與分享，一同豐富這個城市的記憶庫。
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 發布/編輯作品 Modal -->
+    <div id="publish-modal" class="fixed inset-0 z-50 hidden bg-blue-950/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div class="relative max-w-lg w-full bg-white rounded-2xl p-5 sm:p-8 shadow-2xl my-auto max-h-[90vh] overflow-y-auto">
+            <button onclick="closePublishModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center hover:bg-stone-200">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h3 id="publish-modal-title" class="font-serif-title text-lg sm:text-xl font-bold text-stone-900 mb-4">發布新作品</h3>
+            
+            <form id="publish-form" onsubmit="handlePublish(event)" class="space-y-3.5 text-left">
+                <input type="hidden" id="pub-edit-id" value="">
+                <div id="pub-type-selector-group">
+                    <label class="block text-xs font-semibold text-stone-700 mb-1">作品類型</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex items-center justify-center gap-2 p-2.5 border border-blue-200 rounded-lg cursor-pointer hover:bg-blue-50/50">
+                            <input type="radio" name="type" value="artwork" checked onchange="toggleFormType('artwork')">
+                            <span class="text-xs sm:text-sm font-medium text-stone-700">繪畫作品</span>
+                        </label>
+                        <label class="flex items-center justify-center gap-2 p-2.5 border border-blue-200 rounded-lg cursor-pointer hover:bg-blue-50/50">
+                            <input type="radio" name="type" value="article" onchange="toggleFormType('article')">
+                            <span class="text-xs sm:text-sm font-medium text-stone-700">文章隨筆</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-stone-700 mb-1">作品標題 <span class="text-stone-400 font-normal">(選填)</span></label>
+                        <input type="text" id="pub-title" class="w-full px-3 py-2 border border-blue-200 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-blue-800" placeholder="輸入標題...">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-stone-700 mb-1">作者屬名 <span class="text-rose-500">*</span></label>
+                        <input type="text" id="pub-author" required class="w-full px-3 py-2 border border-blue-200 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-blue-800" placeholder="您的筆名或名稱...">
+                    </div>
+                </div>
+
+                <div id="pub-img-group">
+                    <label class="block text-xs font-semibold text-stone-700 mb-1">圖片來源 <span class="text-stone-400 font-normal">(上傳檔案 或 輸入網址)</span></label>
+                    <div class="space-y-2">
+                        <input type="file" id="pub-img-file" accept="image/*" onchange="handleImageFileSelect(event)" class="w-full text-xs text-stone-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-100 file:text-blue-800 hover:file:bg-blue-200 cursor-pointer border border-blue-200 rounded-lg">
+                        <div class="text-[11px] text-stone-400 text-center">或貼上圖片網址</div>
+                        <input type="url" id="pub-img" class="w-full px-3 py-2 border border-blue-200 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-blue-800" placeholder="https://images.unsplash.com/...">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-stone-700 mb-1">分類標籤 <span class="text-stone-400 font-normal">(選填)</span></label>
+                    <select id="pub-tag" class="w-full px-3 py-2 border border-blue-200 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-blue-800">
+                        <option value="角色插畫">角色插畫</option>
+                        <option value="同人小說">同人小說</option>
+                        <option value="短篇隨筆">短篇隨筆</option>
+                        <option value="設定解說">設定解說</option>
+                        <option value="衍生漫畫">衍生漫畫</option>
+                    </select>
+                </div>
+
+                <div id="pub-summary-group">
+                    <label class="block text-xs font-semibold text-stone-700 mb-1">作品簡介 / 摘要 <span class="text-stone-400 font-normal">(選填)</span></label>
+                    <input type="text" id="pub-summary" class="w-full px-3 py-2 border border-blue-200 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-blue-800" placeholder="一句話介紹這項作品...">
+                </div>
+
+                <div>
+                    <label id="pub-content-label" class="block text-xs font-semibold text-stone-700 mb-1">作品詳細說明 <span class="text-stone-400 font-normal" id="pub-content-hint">(選填)</span></label>
+                    <textarea id="pub-content" rows="4" class="w-full px-3 py-2 border border-blue-200 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-blue-800" placeholder="分享這件作品背後的故事..."></textarea>
+                </div>
+
+                <button type="submit" id="pub-submit-btn" class="w-full py-3 bg-blue-900 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-blue-800 transition-all shadow mt-2">
+                    發布至網站
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 訊息提示 Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-blue-950 text-white px-5 py-3 rounded-xl shadow-xl flex items-center gap-3">
+        <i class="fa-solid fa-circle-check text-blue-300"></i>
+        <span id="toast-msg" class="text-sm">操作成功</span>
+    </div>
+
+    <!-- JAVASCRIPT 邏輯處理 -->
+    <script>
+        let itemsData = [];
+        let uploadedImageBase64 = '';
+        let currentTab = 'all';
+        let currentTag = 'all';
+        let activeItem = null;
+
+        window.initAppListeners = function() {
+            if (!window.db || !window.appId) return;
+            const collectionRef = window.collection(window.db, 'artifacts', window.appId, 'public', 'data', 'gallery_items');
+            
+            window.onSnapshot(collectionRef, (snapshot) => {
+                itemsData = [];
+                snapshot.forEach((docSnap) => {
+                    itemsData.push({ firestoreId: docSnap.id, ...docSnap.data() });
+                });
+                itemsData.sort((a, b) => b.id - a.id);
+                renderGrid();
+                
+                if (activeItem) {
+                    const updated = itemsData.find(i => i.firestoreId === activeItem.firestoreId || i.id === activeItem.id);
+                    if (updated) {
+                        activeItem = updated;
+                        if (!document.getElementById('artwork-modal').classList.contains('hidden')) {
+                            document.getElementById('artwork-modal-likes').textContent = activeItem.likes;
+                            updateLikeBtnUI('artwork', activeItem.isLiked);
+                            renderComments('artwork');
+                        } else if (!document.getElementById('article-modal').classList.contains('hidden')) {
+                            document.getElementById('article-modal-likes').textContent = activeItem.likes;
+                            updateLikeBtnUI('article', activeItem.isLiked);
+                            renderComments('article');
+                        }
+                    } else {
+                        closeArtworkModal();
+                        closeArticleModal();
+                    }
+                }
+            }, (error) => {
+                console.error("Firestore snapshot error:", error);
+            });
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                if (itemsData.length === 0) renderGrid();
+            }, 1000);
+        });
+
+        function handleImageFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(uploadEvent) {
+                uploadedImageBase64 = uploadEvent.target.result;
+                document.getElementById('pub-img').value = ''; 
+                showToast('圖片載入成功！');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.nav-link').forEach(el => {
+                el.classList.remove('text-blue-900', 'border-b-2', 'border-blue-900');
+                el.classList.add('hover:text-blue-900');
+            });
+
+            const activeNav = document.getElementById(`nav-${tab}`);
+            if (activeNav) {
+                activeNav.classList.add('text-blue-900', 'border-b-2', 'border-blue-900');
+            }
+
+            const titleEl = document.getElementById('section-title');
+            const descEl = document.getElementById('section-desc');
+
+            if (tab === 'all') {
+                titleEl.textContent = '最新創作全覽';
+                descEl.textContent = '混合展示最新發布的文章與畫作作品';
+            } else if (tab === 'gallery') {
+                titleEl.textContent = '畫作藝廊';
+                descEl.textContent = '探索水墨、油畫與數位繪畫作品';
+            } else if (tab === 'articles') {
+                titleEl.textContent = '隨筆文章';
+                descEl.textContent = '閱讀關於藝術哲思與生活紀錄的文字';
+            }
+
+            renderGrid();
+        }
+
+        function filterByTag(tag) {
+            currentTag = tag;
+            document.querySelectorAll('.tag-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-900', 'text-white');
+                btn.classList.add('bg-white', 'text-stone-600', 'border', 'border-blue-200');
+            });
+
+            event.target.classList.remove('bg-white', 'text-stone-600', 'border', 'border-blue-200');
+            event.target.classList.add('bg-blue-900', 'text-white');
+
+            renderGrid();
+        }
+
+        function renderGrid() {
+            const grid = document.getElementById('content-grid');
+            const emptyState = document.getElementById('empty-state');
+            const countEl = document.getElementById('item-count');
+
+            let filtered = itemsData.filter(item => {
+                const matchTab = (currentTab === 'all') || 
+                                 (currentTab === 'gallery' && item.type === 'artwork') || 
+                                 (currentTab === 'articles' && item.type === 'article');
+                const matchTag = (currentTag === 'all') || (item.tag === currentTag);
+                return matchTab && matchTag;
+            });
+
+            countEl.textContent = filtered.length;
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            grid.innerHTML = filtered.map(item => {
+                const fId = item.firestoreId || '';
+                const actionBtnsHtml = `
+                    <div class="absolute top-3 right-3 z-20 flex items-center gap-1.5">
+                        <button type="button" onclick="event.stopPropagation(); openEditModal('${fId}')" class="bg-white/90 hover:bg-blue-900 hover:text-white text-stone-700 w-8 h-8 rounded-full shadow flex items-center justify-center transition-all" title="編輯作品">
+                            <i class="fa-solid fa-pen text-xs"></i>
+                        </button>
+                        <button type="button" onclick="event.stopPropagation(); deleteItemDirectly('${fId}', ${item.id})" class="bg-white/90 hover:bg-rose-500 hover:text-white text-rose-500 w-8 h-8 rounded-full shadow flex items-center justify-center transition-all" title="刪除作品">
+                            <i class="fa-regular fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
+                `;
+
+                if (item.type === 'artwork') {
+                    return `
+                        <div class="gallery-card bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-blue-100 flex flex-col group cursor-pointer relative" onclick="openArtworkModal(${item.id})">
+                            ${actionBtnsHtml}
+                            <div class="relative aspect-[4/3] overflow-hidden bg-blue-50/50">
+                                <img src="${item.image}" alt="${item.title}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy">
+                                <div class="gallery-overlay absolute inset-0 bg-black/40 opacity-0 transition-opacity duration-300 flex items-center justify-center">
+                                    <span class="bg-white/90 text-stone-900 px-4 py-2 rounded-full text-xs font-semibold tracking-wider shadow">
+                                        <i class="fa-solid fa-expand mr-1"></i> 查看原圖
+                                    </span>
+                                </div>
+                                <span class="absolute top-3 left-3 bg-blue-900/85 backdrop-blur-md text-white text-[10px] font-medium tracking-wider uppercase px-2.5 py-1 rounded-full">
+                                    ${item.tag}
+                                </span>
+                            </div>
+                            <div class="p-5 flex-grow flex flex-col justify-between">
+                                <div>
+                                    <div class="flex items-center justify-between text-xs text-stone-400 mb-1.5 font-mono">
+                                        <span>By ${item.author || '匿名'}</span>
+                                        <span>${item.date}</span>
+                                    </div>
+                                    <h3 class="font-serif-title font-bold text-lg text-stone-900 group-hover:text-blue-800 transition-colors line-clamp-1">${item.title}</h3>
+                                    <p class="text-stone-500 text-xs mt-1.5 line-clamp-2 leading-relaxed font-light">${item.summary || item.description}</p>
+                                </div>
+                                <div class="mt-4 pt-3 border-t border-blue-50 flex items-center justify-between text-xs text-stone-400">
+                                    <span class="text-stone-400 font-mono">畫作藝廊</span>
+                                    <span class="flex items-center gap-1 ${item.isLiked ? 'text-rose-500' : ''}">
+                                        <i class="${item.isLiked ? 'fa-solid' : 'fa-regular'} fa-heart"></i> ${item.likes}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="bg-white rounded-2xl p-6 shadow-sm hover:shadow-xl transition-all duration-300 border border-blue-100 flex flex-col justify-between group cursor-pointer relative" onclick="openArticleModal(${item.id})">
+                            ${actionBtnsHtml}
+                            <div>
+                                <div class="flex items-center justify-between mb-3 pr-16">
+                                    <span class="bg-blue-100 text-blue-900 text-[10px] font-semibold tracking-wider uppercase px-2.5 py-1 rounded-full">
+                                        ${item.tag}
+                                    </span>
+                                    <span class="text-xs text-stone-400 font-mono">${item.readTime || '3 分鐘'}</span>
+                                </div>
+                                <h3 class="font-serif-title font-bold text-xl text-stone-900 group-hover:text-blue-800 transition-colors leading-snug mb-2">${item.title}</h3>
+                                <div class="text-xs text-stone-400 font-mono mb-3">作者：${item.author || '匿名'} • ${item.date}</div>
+                                <p class="text-stone-600 text-sm line-clamp-3 leading-relaxed font-light mb-4">${item.summary}</p>
+                            </div>
+                            <div class="pt-4 border-t border-blue-50 flex items-center justify-between text-xs text-stone-400 font-mono">
+                                <span class="flex items-center gap-1 ${item.isLiked ? 'text-rose-500' : ''}">
+                                    <i class="${item.isLiked ? 'fa-solid' : 'fa-regular'} fa-heart"></i> ${item.likes}
+                                </span>
+                                <span class="text-blue-800 font-sans font-medium flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                    閱讀全文 <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                                </span>
+                            </div>
+                        </div>
+                    `;
+                }
+            }).join('');
+        }
+
+        function openArtworkModal(id) {
+            const item = itemsData.find(i => i.id === id);
+            if (!item) return;
+            activeItem = item;
+            const fId = item.firestoreId || '';
+
+            document.getElementById('artwork-modal-img').src = item.image;
+            document.getElementById('artwork-modal-title').textContent = item.title;
+            document.getElementById('artwork-modal-tag').textContent = item.tag;
+            document.getElementById('artwork-modal-date').textContent = `作者：${item.author || '匿名'}  |  創作日期: ${item.date}`;
+            document.getElementById('artwork-modal-desc').textContent = item.description;
+            document.getElementById('artwork-modal-likes').textContent = item.likes;
+
+            const actionContainer = document.getElementById('artwork-action-container');
+            actionContainer.innerHTML = `
+                <button type="button" onclick="openEditModal('${fId}')" class="text-xs text-stone-700 hover:text-stone-900 transition-colors flex items-center gap-1 py-1 px-2.5 rounded-lg bg-blue-50 hover:bg-blue-100 font-medium cursor-pointer" title="編輯作品">
+                    <i class="fa-solid fa-pen"></i> 編輯
+                </button>
+                <button type="button" onclick="deleteItemDirectly('${fId}', ${item.id})" class="text-xs text-rose-500 hover:text-rose-700 transition-colors flex items-center gap-1 py-1 px-2.5 rounded-lg bg-rose-50 hover:bg-rose-100 font-medium cursor-pointer" title="刪除作品">
+                    <i class="fa-regular fa-trash-can"></i> 刪除
+                </button>
+            `;
+
+            updateLikeBtnUI('artwork', item.isLiked);
+            renderComments('artwork');
+
+            document.getElementById('artwork-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeArtworkModal() {
+            document.getElementById('artwork-modal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        function openArticleModal(id) {
+            const item = itemsData.find(i => i.id === id);
+            if (!item) return;
+            activeItem = item;
+            const fId = item.firestoreId || '';
+
+            document.getElementById('article-modal-title').textContent = item.title;
+            document.getElementById('article-modal-tag').textContent = item.tag;
+            document.getElementById('article-modal-readtime').textContent = item.readTime || '3 分鐘';
+            document.getElementById('article-modal-date').innerHTML = `<i class="fa-regular fa-calendar mr-1"></i> ${item.date}  •  作者：${item.author || '匿名'}`;
+            
+            const imgContainer = document.getElementById('article-modal-img-container');
+            if (item.image) {
+                document.getElementById('article-modal-img').src = item.image;
+                imgContainer.classList.remove('hidden');
+            } else {
+                imgContainer.classList.add('hidden');
+            }
+
+            const contentContainer = document.getElementById('article-modal-content');
+            contentContainer.innerHTML = item.content.split('\n\n').map(p => `<p class="leading-relaxed">${p}</p>`).join('');
+
+            const actionContainer = document.getElementById('article-action-container');
+            actionContainer.innerHTML = `
+                <button type="button" onclick="openEditModal('${fId}')" class="text-xs text-stone-700 hover:text-stone-900 transition-colors flex items-center gap-1 py-1 px-2.5 rounded-lg bg-blue-50 hover:bg-blue-100 font-medium cursor-pointer" title="編輯作品">
+                    <i class="fa-solid fa-pen"></i> 編輯
+                </button>
+                <button type="button" onclick="deleteItemDirectly('${fId}', ${item.id})" class="text-xs text-rose-500 hover:text-rose-700 transition-colors flex items-center gap-1 py-1 px-2.5 rounded-lg bg-rose-50 hover:bg-rose-100 font-medium cursor-pointer" title="刪除作品">
+                    <i class="fa-regular fa-trash-can"></i> 刪除
+                </button>
+            `;
+
+            document.getElementById('article-modal-likes').textContent = item.likes;
+            updateLikeBtnUI('article', item.isLiked);
+            renderComments('article');
+
+            document.getElementById('article-modal').classList.add('flex');
+            document.getElementById('article-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeArticleModal() {
+            document.getElementById('article-modal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        async function deleteItemDirectly(firestoreId, localId) {
+            const confirmDelete = window.confirm("確定要刪除這項作品嗎？此動作將無法復原。");
+            if (!confirmDelete) return;
+
+            try {
+                if (firestoreId && firestoreId !== 'undefined' && firestoreId !== 'null' && window.db) {
+                    const docRef = window.doc(window.db, 'artifacts', window.appId, 'public', 'data', 'gallery_items', firestoreId);
+                    await window.deleteDoc(docRef);
+                }
+                
+                itemsData = itemsData.filter(i => i.id !== localId && i.firestoreId !== firestoreId);
+                renderGrid();
+
+                closeArtworkModal();
+                closeArticleModal();
+                activeItem = null;
+                showToast('作品已成功刪除！');
+            } catch (err) {
+                console.error("Error deleting item:", err);
+                showToast('刪除失敗，請檢查網路連線');
+            }
+        }
+
+        function openEditModal(firestoreId) {
+            const item = itemsData.find(i => i.firestoreId === firestoreId);
+            if (!item) return;
+
+            closeArtworkModal();
+            closeArticleModal();
+
+            document.getElementById('publish-modal-title').textContent = '編輯作品';
+            document.getElementById('pub-submit-btn').textContent = '儲存修改';
+            document.getElementById('pub-edit-id').value = item.firestoreId;
+
+            const typeRadios = document.querySelectorAll('input[name="type"]');
+            typeRadios.forEach(r => {
+                if (r.value === item.type) {
+                    r.checked = true;
+                }
+            });
+            toggleFormType(item.type);
+
+            document.getElementById('pub-title').value = item.title || '';
+            document.getElementById('pub-author').value = item.author || '';
+            document.getElementById('pub-tag').value = item.tag || '角色插畫';
+            document.getElementById('pub-summary').value = item.summary || '';
+            document.getElementById('pub-img').value = item.image || '';
+            document.getElementById('pub-content').value = item.type === 'article' ? (item.content || '') : (item.description || '');
+
+            uploadedImageBase64 = '';
+
+            document.getElementById('publish-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function renderComments(type) {
+            if (!activeItem) return;
+            if (!activeItem.comments) activeItem.comments = [];
+
+            const listEl = document.getElementById(`${type}-comments-list`);
+            const countEl = document.getElementById(`${type}-comment-count`);
+
+            if (type === 'artwork') {
+                countEl.textContent = activeItem.comments.length;
+            } else {
+                countEl.textContent = `${activeItem.comments.length} 則留言`;
+            }
+
+            if (activeItem.comments.length === 0) {
+                listEl.innerHTML = `<p class="text-xs text-stone-400 italic py-2">還沒有人留言，來搶頭香吧！</p>`;
+                return;
+            }
+
+            listEl.innerHTML = activeItem.comments.map(c => `
+                <div class="${type === 'artwork' ? 'bg-blue-50/50 p-2.5 rounded border border-blue-100' : 'bg-blue-50/50 p-3 rounded-lg border border-blue-100'}">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="font-semibold text-stone-900 text-xs">${c.name}</span>
+                        <span class="text-[10px] text-stone-400 font-mono">${c.date}</span>
+                    </div>
+                    <p class="text-stone-600 text-xs leading-relaxed">${c.text}</p>
+                </div>
+            `).join('');
+        }
+
+        async function handleCommentSubmit(e, type) {
+            e.preventDefault();
+            if (!activeItem || !activeItem.firestoreId || !window.db) return;
+
+            const nameInput = document.getElementById(`${type}-comment-name`);
+            const textInput = document.getElementById(`${type}-comment-text`);
+
+            const newComment = {
+                name: nameInput.value.trim(),
+                text: textInput.value.trim(),
+                date: new Date().toISOString().split('T')[0]
+            };
+
+            const updatedComments = [...(activeItem.comments || []), newComment];
+
+            try {
+                const docRef = window.doc(window.db, 'artifacts', window.appId, 'public', 'data', 'gallery_items', activeItem.firestoreId);
+                await window.updateDoc(docRef, { comments: updatedComments });
+
+                nameInput.value = '';
+                textInput.value = '';
+                showToast('留言發布成功！');
+            } catch (err) {
+                console.error("Error adding comment:", err);
+                showToast('留言發布失敗');
+            }
+        }
+
+        async function toggleLikeCurrentItem() {
+            if (!activeItem || !activeItem.firestoreId || !window.db) return;
+
+            const newIsLiked = !activeItem.isLiked;
+            const newLikes = activeItem.likes + (newIsLiked ? 1 : -1);
+
+            try {
+                const docRef = window.doc(window.db, 'artifacts', window.appId, 'public', 'data', 'gallery_items', activeItem.firestoreId);
+                await window.updateDoc(docRef, {
+                    isLiked: newIsLiked,
+                    likes: newLikes
+                });
+
+                showToast(newIsLiked ? '已收錄至喜愛作品' : '已取消讚');
+            } catch (err) {
+                console.error("Error updating likes:", err);
+                showToast('操作失敗');
+            }
+        }
+
+        function updateLikeBtnUI(type, isLiked) {
+            const icon = document.getElementById(`${type}-like-icon`);
+            if (!icon) return;
+            if (isLiked) {
+                icon.className = 'fa-solid fa-heart text-xl text-rose-500';
+            } else {
+                icon.className = 'fa-regular fa-heart text-xl';
+            }
+        }
+
+        function openAboutModal() {
+            document.getElementById('about-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeAboutModal() {
+            document.getElementById('about-modal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        function openPublishModal() {
+            document.getElementById('publish-modal-title').textContent = '發布新作品';
+            document.getElementById('pub-submit-btn').textContent = '發布至網站';
+            document.getElementById('pub-edit-id').value = '';
+            document.getElementById('publish-form').reset();
+            toggleFormType('artwork');
+
+            document.getElementById('publish-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closePublishModal() {
+            document.getElementById('publish-modal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        function toggleFormType(type) {
+            const imgGroup = document.getElementById('pub-img-group');
+            const label = document.getElementById('pub-content-label');
+            const textarea = document.getElementById('pub-content');
+            
+            if (type === 'artwork') {
+                imgGroup.classList.remove('hidden');
+                label.innerHTML = '作品詳細說明 <span class="text-stone-400 font-normal">(選填)</span>';
+                textarea.required = false;
+            } else {
+                imgGroup.classList.add('hidden');
+                label.innerHTML = '文章詳細內文 <span class="text-rose-500">*</span>';
+                textarea.required = true;
+            }
+        }
+
+        async function handlePublish(e) {
+            e.preventDefault();
+            
+            const editId = document.getElementById('pub-edit-id').value;
+            const type = document.querySelector('input[name="type"]:checked').value;
+            let title = document.getElementById('pub-title').value.trim();
+            const author = document.getElementById('pub-author').value.trim();
+            const tag = document.getElementById('pub-tag').value;
+            const summary = document.getElementById('pub-summary').value.trim();
+            const content = document.getElementById('pub-content').value.trim();
+            const imgUrl = document.getElementById('pub-img').value.trim();
+
+            const finalImage = uploadedImageBase64 || imgUrl || '';
+
+            if (type === 'article' && !content) {
+                showToast('文章必須填寫詳細內文！');
+                return;
+            }
+
+            if (!title) {
+                const textSource = content || summary;
+                title = textSource && textSource.length > 12 ? textSource.slice(0, 12) + '...' : (textSource || '無題作品');
+            }
+
+            if (editId && window.db) {
+                try {
+                    const docRef = window.doc(window.db, 'artifacts', window.appId, 'public', 'data', 'gallery_items', editId);
+                    const updateData = {
+                        title: title,
+                        author: author,
+                        tag: tag,
+                        summary: summary || (content.length > 60 ? content.slice(0, 60) + '...' : (content || '無詳細簡介'))
+                    };
+                    if (finalImage) {
+                        updateData.image = finalImage;
+                    }
+                    if (type === 'artwork') {
+                        updateData.description = content || '創作者未留下詳細說明。';
+                    } else {
+                        updateData.content = content;
+                    }
+
+                    await window.updateDoc(docRef, updateData);
+                    closePublishModal();
+                    showToast('作品已成功更新！');
+                } catch (err) {
+                    console.error("Error updating item:", err);
+                    showToast('更新失敗，請稍後再試');
+                }
+            } else if (window.db) {
+                const newItem = {
+                    id: Date.now(),
+                    type: type,
+                    title: title,
+                    author: author,
+                    tag: tag,
+                    date: new Date().toISOString().split('T')[0],
+                    likes: 0,
+                    isLiked: false,
+                    comments: [],
+                    summary: summary || (content.length > 60 ? content.slice(0, 60) + '...' : (content || '無詳細簡介')),
+                    image: finalImage
+                };
+
+                if (type === 'artwork') {
+                    newItem.description = content || '創作者未留下詳細說明。';
+                } else {
+                    newItem.content = content;
+                    newItem.readTime = '3 分鐘';
+                }
+
+                try {
+                    const collectionRef = window.collection(window.db, 'artifacts', window.appId, 'public', 'data', 'gallery_items');
+                    await window.addDoc(collectionRef, newItem);
+
+                    uploadedImageBase64 = '';
+                    closePublishModal();
+                    showToast('作品成功發布至雲端！');
+                } catch (err) {
+                    console.error("Error publishing item:", err);
+                    showToast('發布失敗，請稍後再試');
+                }
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').textContent = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        const mobileBtn = document.getElementById('mobile-menu-btn');
+        if (mobileBtn) {
+            mobileBtn.addEventListener('click', toggleMobileMenu);
+        }
+
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            if (menu) {
+                menu.classList.toggle('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
